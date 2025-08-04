@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>what to eat</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+
+        h1 {
+            margin-top: 20px;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 1080px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+        }
+
+        .editor {
+            margin-bottom: 20px;
+            width: 100%;
+            display: flex;
+            gap: 16px;
+            flex-direction: column;
+            position: sticky;
+            bottom: 0;
+            background: inherit;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            font-size: 16px;
+            resize: none;
+            display: none;
+        }
+
+        .action {
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+
+        #roll {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: start;
+            width: 100%;
+            gap: 10px;
+            flex-grow: 1;
+            flex-direction: column;
+        }
+
+        .restaurant {
+            border-radius: 5px;
+            padding: 15px;
+            width: 100%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            transition: ease-in-out .2s;
+            box-sizing: border-box;
+        }
+
+        .name {
+            flex-grow: 1;
+            height: 1em;
+            font-size: 18px;
+            text-align: left;
+        }
+
+        .active,
+        .eat {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .active {
+            display: none;
+        }
+
+        .restaurant.ate {
+            opacity: .5;
+        }
+
+        .restaurant.select {
+            outline: solid 4px #ee4e;
+        }
+
+        .restaurant.ate>span {
+            text-decoration: line-through;
+        }
+
+        .restaurant.ate>.active {
+            display: block;
+        }
+
+        .restaurant.ate>.eat {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <h1>What to eat today?</h1>
+        <div id="roll">
+            <template>
+                <div class="restaurant">
+                    <span class="name">{{ restaurant }}</span>
+                    <span class="date">{{ date }}</span>
+                    <button class="eat">🍽️</button>
+                    <button class="active">🔄️</button>
+                </div>
+            </template>
+        </div>
+        <div class="editor">
+            <div class="action">
+                <button class="edit">编辑</button>
+                <button class="submit">保存</button>
+                <button class="random">抽取</button>
+                <button class="reset">重置</button>
+            </div>
+            <textarea name="restaurants" id="restaurants"></textarea>
+        </div>
+    </div>
+    <script>
+        const colors = [
+            "#D7D2B4", "#D5B87C", "#FB6571", "#EDCFB3", "#F4B0A5",
+            "#C4EBF0", "#1FC6B2", "#B8F0D3", "#94CCC3", "#A8EFE9",
+            "#928AD3", "#E4C994", "#DD8DB0", "#A2BFE1", "#D8979B",
+            "#CBDF9A", "#D194A3", "#DC95BF", "#D6E19C", "#C199E0",
+            "#A0D0DC", "#D9939B", "#D7B399", "#B2D1D3", "#DA949C",
+        ];
+
+        const restaurants = new Map(JSON.parse(localStorage.getItem('restaurants')) ?? []);
+        const roll = document.getElementById('roll');
+        const textarea = document.getElementById('restaurants');
+
+        const template = roll.querySelector('template');
+        const loadData = (data, init) => {
+            document.querySelectorAll('.restaurant').forEach(el => el.remove());
+            textarea.value = '';
+            for (const [name, date] of data) {
+                const restaurantElement = template.content.cloneNode(true);
+                const restaurantDiv = restaurantElement.querySelector('.restaurant');
+                restaurantDiv.querySelector('.name').textContent = name;
+                restaurantDiv.querySelector('.date').textContent = date === 0 ? '' : new Date(date).toLocaleDateString();
+                if (date) {
+                    restaurantDiv.classList.add('ate');
+                } else {
+                    restaurantDiv.classList.remove('ate');
+                }
+                restaurantDiv.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                roll.appendChild(restaurantElement);
+                textarea.value += `${name}\n`;
+            }
+        }
+
+        let textareaShown = false;
+        const editButton = document.querySelector('.edit');
+        const toggleTextarea = (hidden) => {
+            if (typeof hidden === 'boolean') {
+                textareaShown = hidden;
+            }
+            textarea.style.display = textareaShown ? 'none' : 'block';
+            textareaShown = !textareaShown;
+        };
+        editButton.addEventListener('click', toggleTextarea);
+
+        {
+            const submitButton = document.querySelector('.submit');
+            submitButton.addEventListener('click', () => {
+                const input = textarea.value.trim();
+                const cached = new Map(restaurants.entries());
+                restaurants.clear();
+                if (input) {
+                    const lines = input.split('\n').map(line => line.trim()).filter(line => line);
+                    for (const line of lines) {
+                        restaurants.set(line, cached.get(line) ?? 0);
+                    }
+                    localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
+                }
+                loadData(restaurants);
+                toggleTextarea(true);
+            });
+        }
+
+        roll.addEventListener('click', (e) => {
+            if (e.target.classList.contains('eat')) {
+                const restaurantDiv = e.target.closest('.restaurant');
+                const name = restaurantDiv.querySelector('.name').textContent;
+                if (restaurants.has(name)) {
+                    const date = new Date();
+                    restaurants.set(name, date.getTime());
+                    restaurantDiv.querySelector('.date').textContent = date.toLocaleDateString();
+                    localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
+                    restaurantDiv.classList.add('ate');
+                }
+            } else if (e.target.classList.contains('active')) {
+                const restaurantDiv = e.target.closest('.restaurant');
+                const name = restaurantDiv.querySelector('.name').textContent;
+                if (restaurants.has(name)) {
+                    restaurants.set(name, 0);
+                    restaurantDiv.querySelector('.date').textContent = '';
+                    localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
+                    restaurantDiv.classList.remove('ate');
+                }
+            }
+        });
+        {
+            const resetButton = document.querySelector('.action .reset');
+            resetButton.addEventListener('click', () => {
+                restaurants.forEach((_, name) => {
+                    restaurants.set(name, 0);
+                });
+                localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
+                loadData(restaurants);
+            });
+        }
+        {
+            const randomButton = document.querySelector('.random');
+            randomButton.addEventListener('click', () => {
+                const restaurantList = Array.from(restaurants.keys()).filter(name => restaurants.get(name) === 0);
+                // first attempt to select a not eat restaurant
+                if (restaurantList.length === 0) {
+                    restaurantList.push(...Array.from(restaurants.keys()));
+                }
+
+                const randomIndex = Math.floor(Math.random() * restaurantList.length);
+                const selectedRestaurant = restaurantList[randomIndex];
+                roll.querySelectorAll('.restaurant.select').forEach(el => el.classList.remove('select'));
+                roll.querySelectorAll('.restaurant').forEach(el => {
+                    if (el.querySelector('.name').textContent === selectedRestaurant) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.classList.add('select');
+                    }
+                });
+            });
+        }
+        loadData(restaurants);
+    </script>
+</body>
+
+</html>
