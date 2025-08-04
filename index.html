@@ -24,7 +24,7 @@
         }
 
         #app {
-            width: 100%;
+            width: 90%;
             max-width: 1080px;
             margin: 0 auto;
             display: flex;
@@ -34,33 +34,33 @@
         }
 
         .editor {
-            margin-bottom: 20px;
             width: 100%;
             display: flex;
-            gap: 16px;
+            gap: 8px;
             flex-direction: column;
             position: sticky;
-            bottom: 0;
+            bottom: 24px;
             background: inherit;
+            margin-top: 48px;
         }
 
         textarea {
             width: 100%;
             height: 100px;
-            padding: 10px;
             font-size: 16px;
             resize: none;
             display: none;
         }
 
         .action {
-            margin-top: 10px;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
         }
 
         button {
             padding: 10px 15px;
             font-size: 16px;
-            margin-right: 10px;
         }
 
         #roll {
@@ -108,7 +108,7 @@
         }
 
         .restaurant.select {
-            outline: solid 4px #ee4e;
+            outline: solid 4px #ee4;
         }
 
         .restaurant.ate>span {
@@ -121,6 +121,34 @@
 
         .restaurant.ate>.eat {
             display: none;
+        }
+
+        .history-log {
+            width: 80%;
+            height: 80%;
+            background-color: #fff;
+            box-shadow: 0 16px 20px -16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            position: fixed;
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            max-width: 1080px;
+        }
+
+        .history-content {
+            flex-grow: 1;
+            padding: 16px;
+            overflow-y: auto;
+            text-align: left;
+        }
+
+        .history-log .close,
+        .history-log .clear {
+            margin: 8px;
         }
     </style>
 </head>
@@ -139,13 +167,20 @@
             </template>
         </div>
         <div class="editor">
+            <textarea name="restaurants" id="restaurants"></textarea>
             <div class="action">
                 <button class="edit">编辑</button>
                 <button class="submit">保存</button>
                 <button class="random">抽取</button>
                 <button class="reset">重置</button>
+                <button class="history">历史</button>
             </div>
-            <textarea name="restaurants" id="restaurants"></textarea>
+        </div>
+        <div class="history-log">
+            <h2>历史记录</h2>
+            <div class="history-content"></div>
+            <button class="clear">清空</button>
+            <button class="close">关闭</button>
         </div>
     </div>
     <script>
@@ -157,6 +192,45 @@
             "#A0D0DC", "#D9939B", "#D7B399", "#B2D1D3", "#DA949C",
         ];
 
+        class OptionHistory {
+            constructor() {
+                // [name, date, option]
+                this.history = JSON.parse(localStorage.getItem('history')) ?? [];
+            }
+
+            // option: EAT, IGN, RST
+            add(name, date, option) {
+                this.history.push([name, date.getTime(), option]);
+                localStorage.setItem('history', JSON.stringify(this.history));
+            }
+            clear() {
+                this.history.length = 0;
+                localStorage.removeItem('history');
+            }
+            toString() {
+                let str = '';
+                for (let i = this.history.length - 1; i >= 0; i--) {
+                    const [name, date, option] = this.history[i];
+                    str += `[${new Date(date).toLocaleString()}] ${option} ${name}\n`;
+                }
+                return str;
+            }
+            toHtml() {
+                let str = '';
+                for (let i = this.history.length - 1; i >= 0; i--) {
+                    const [name, date, option] = this.history[i];
+                    str += `[${new Date(date).toLocaleString()}] ${option} ${name}<br/>`;
+                }
+                return str;
+            }
+            /**
+             * @type Array<[string, number, string]>
+             */
+            history;
+        }
+
+        const g_optionHistory = new OptionHistory();
+
         const restaurants = new Map(JSON.parse(localStorage.getItem('restaurants')) ?? []);
         const roll = document.getElementById('roll');
         const textarea = document.getElementById('restaurants');
@@ -165,6 +239,7 @@
         const loadData = (data, init) => {
             document.querySelectorAll('.restaurant').forEach(el => el.remove());
             textarea.value = '';
+            let colorIdx = Math.floor(Math.random() * colors.length)
             for (const [name, date] of data) {
                 const restaurantElement = template.content.cloneNode(true);
                 const restaurantDiv = restaurantElement.querySelector('.restaurant');
@@ -175,7 +250,8 @@
                 } else {
                     restaurantDiv.classList.remove('ate');
                 }
-                restaurantDiv.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                restaurantDiv.style.backgroundColor = colors[colorIdx];
+                colorIdx = (colorIdx + 1) % colors.length;
                 roll.appendChild(restaurantElement);
                 textarea.value += `${name}\n`;
             }
@@ -220,6 +296,7 @@
                     restaurantDiv.querySelector('.date').textContent = date.toLocaleDateString();
                     localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
                     restaurantDiv.classList.add('ate');
+                    g_optionHistory.add(name, date, 'EAT');
                 }
             } else if (e.target.classList.contains('active')) {
                 const restaurantDiv = e.target.closest('.restaurant');
@@ -229,6 +306,7 @@
                     restaurantDiv.querySelector('.date').textContent = '';
                     localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
                     restaurantDiv.classList.remove('ate');
+                    g_optionHistory.add(name, new Date(), 'IGN');
                 }
             }
         });
@@ -240,6 +318,7 @@
                 });
                 localStorage.setItem('restaurants', JSON.stringify(Array.from(restaurants.entries())));
                 loadData(restaurants);
+                g_optionHistory.add('$all$', new Date(), 'RST');
             });
         }
         {
@@ -261,6 +340,22 @@
                     }
                 });
             });
+        }
+        {
+            const historyPanel = document.querySelector(".history-log");
+            const historyContent = historyPanel.querySelector(".history-content");
+            document.querySelector(".action .history").addEventListener('click', () => {
+                historyContent.innerHTML = g_optionHistory.toHtml();
+                historyPanel.style.display = '';
+            });
+            historyPanel.querySelector('.clear').addEventListener('click', () => {
+                g_optionHistory.clear();
+                historyContent.innerHTML = '';
+            });
+            historyPanel.querySelector('.close').addEventListener('click', () => {
+                historyContent.parentElement.style.display = 'none';
+            });
+            historyPanel.style.display = 'none';
         }
         loadData(restaurants);
     </script>
